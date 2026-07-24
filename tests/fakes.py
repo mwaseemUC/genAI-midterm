@@ -37,6 +37,24 @@ class FakeLLM:
         return FakeResponse(self._responses.pop(0))
 
 
+class FakeStreamingLLM:
+    """Yields a response one chunk at a time, mimicking ChatOpenAI.stream().
+
+    Splitting a canned response into arbitrary chunks is the point: it proves
+    the streaming code handles a SOURCES marker that arrives split across
+    chunk boundaries.
+    """
+
+    def __init__(self, chunks: list[str]):
+        self._chunks = list(chunks)
+        self.prompts: list = []
+
+    def stream(self, prompt):
+        self.prompts.append(prompt)
+        for chunk in self._chunks:
+            yield FakeResponse(chunk)
+
+
 class FakeVectorStore:
     """Returns a preset document list per query string.
 
