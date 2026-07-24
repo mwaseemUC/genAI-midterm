@@ -7,8 +7,11 @@ from __future__ import annotations
 
 import os
 
+from dotenv import load_dotenv
 import streamlit as st
 from langchain_openai import ChatOpenAI
+
+load_dotenv()
 
 from rag import condense as condense_module
 from rag import fusion, hyde, multiquery
