@@ -87,8 +87,15 @@ User question: {question}
 
 HYDE_PROMPT = """\
 Write a short, plausible-sounding answer to the following question about the
-MS in Applied Data Science program at the University of Chicago. It does not need to be
-factually correct. Write it in the style of a program FAQ or webpage.
+MS in Applied Data Science program at the University of Chicago. Write it in
+the style of a program FAQ or webpage.
+
+CRITICAL: Your hypothetical must be factually sound. Never generate:
+- Test scores outside valid ranges (TOEFL is 0–120, IELTS is 0–9)
+- Fees or dates that are wildly implausible
+- Contradictory statements (e.g., "X or Y" where Y is impossible)
+The hypothetical is only a retrieval query, not an answer shown to users, so
+factual accuracy in the hypothetical itself matters for retrieval quality.
 
 This program has multiple distinct application paths (Online, In-Person, and the MBA/MS
 joint degree with Chicago Booth). Only mention these paths if the question is specifically

@@ -66,3 +66,30 @@ def test_off_topic_question_is_declined(store, llms):
     docs, _ = fusion.retrieve(store, query_llm, "Who won the 2022 World Cup?")
     answer = generate(answer_llm, "Who won the 2022 World Cup?", docs)["answer"]
     assert "Argentina" not in answer
+
+
+@pytest.mark.parametrize("pipeline", [fusion, hyde, multiquery])
+@pytest.mark.parametrize("question", [
+    "What is the difference between the online and in-person programs?",
+    "Is there an application fee?",
+    "What GPA do I need to apply?",
+    "Are there scholarships or financial aid available?",
+    "What are the career outcomes for graduates?",
+    "Can I apply to both the online and in-person programs simultaneously?",
+    "What is the mailing address for the program?",
+])
+def test_stress_questions_all_pipelines(store, llms, pipeline, question):
+    """Stress test: diverse question types across all pipelines.
+
+    Ensures no pipeline crashes, all return 8 docs, and all provide sources.
+    Does not assert specific answer content, only structural soundness.
+    """
+    answer_llm, query_llm = llms
+    docs, queries = pipeline.retrieve(store, query_llm, question)
+
+    assert len(docs) == 8, f"{pipeline.__name__} returned {len(docs)} docs instead of 8"
+    assert queries, f"{pipeline.__name__} returned no queries"
+
+    result = generate(answer_llm, question, docs)
+    assert result["answer"], f"{pipeline.__name__} returned empty answer"
+    assert isinstance(result["sources"], str), f"{pipeline.__name__} sources not a string"
