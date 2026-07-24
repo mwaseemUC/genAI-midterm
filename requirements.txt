@@ -1,0 +1,7 @@
+streamlit>=1.40,<2
+langchain-core>=0.3,<2
+langchain-openai>=0.2,<1
+langchain-chroma>=0.1,<1
+chromadb>=0.5,<2
+tiktoken>=0.7,<1
+pytest>=8,<9

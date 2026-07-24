@@ -1,0 +1,15 @@
+# Secrets: never commit
+.env
+.streamlit/secrets.toml
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Environments
+.venv/
+venv/
+
+# Jupyter
+.ipynb_checkpoints/
