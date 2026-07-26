@@ -1,6 +1,11 @@
 from langchain_core.documents import Document
 
-from rag.answer import format_context, generate_stream, parse_sources
+from rag.answer import (
+    citation_pairs,
+    format_context,
+    generate_stream,
+    parse_sources,
+)
 from rag.prompts import FALLBACK_TEXT
 from tests.fakes import FakeStreamingLLM
 
@@ -67,6 +72,59 @@ def test_format_context_includes_provenance():
 def test_format_context_separates_multiple_docs():
     context = format_context([make_doc(title="A"), make_doc(title="B")])
     assert context.count("---") == 2
+
+
+def test_parse_sources_keeps_commas_inside_page_titles():
+    """Two real corpus pages contain commas. Splitting the line on "," shredded
+    "Tuition, Fees, & Aid" into three citations, none of them a real page."""
+    raw = "Body.\nSOURCES: Tuition, Fees, & Aid (https://x.test/t/)"
+    _, sources = parse_sources(raw)
+    assert sources == "Tuition, Fees, & Aid (https://x.test/t/)"
+
+
+def test_parse_sources_dedupes_by_url_not_by_text_fragment():
+    raw = (
+        "Body.\nSOURCES: Faculty, Instructors, Staff (https://x.test/f/), "
+        "Tuition, Fees, & Aid (https://x.test/t/), "
+        "Faculty, Instructors, Staff (https://x.test/f/)"
+    )
+    _, sources = parse_sources(raw)
+    assert sources == (
+        "Faculty, Instructors, Staff (https://x.test/f/), "
+        "Tuition, Fees, & Aid (https://x.test/t/)"
+    )
+
+
+def test_parse_sources_preserves_a_line_it_cannot_parse():
+    """Format drift must not silently erase the citation. Keeping the raw text
+    lets the UI show something rather than nothing."""
+    raw = "Body.\nSOURCES: How to Apply"
+    _, sources = parse_sources(raw)
+    assert sources == "How to Apply"
+
+
+def test_citation_pairs_reads_the_plain_format():
+    pairs = citation_pairs("How to Apply (https://x.test/a/)")
+    assert pairs == [("How to Apply", "https://x.test/a/")]
+
+
+def test_citation_pairs_reads_markdown_links():
+    """The model sometimes emits [Title](url) instead of Title (url)."""
+    pairs = citation_pairs("[How to Apply](https://x.test/a/)")
+    assert pairs == [("How to Apply", "https://x.test/a/")]
+
+
+def test_citation_pairs_strips_the_separating_comma_from_the_next_title():
+    pairs = citation_pairs("A Page (https://x.test/a/), B Page (https://x.test/b/)")
+    assert pairs == [("A Page", "https://x.test/a/"), ("B Page", "https://x.test/b/")]
+
+
+def test_citation_pairs_returns_nothing_for_text_without_urls():
+    assert citation_pairs("How to Apply") == []
+
+
+def test_citation_pairs_handles_empty_input():
+    assert citation_pairs("") == []
 
 
 # --- streaming ---------------------------------------------------------------

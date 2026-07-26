@@ -7,8 +7,19 @@ from __future__ import annotations
 
 import html
 import os
-import re
+import sys
 import time
+
+# ChromaDB hard-raises at import time when sqlite3 < 3.35, and its own hot-swap
+# only runs under Colab. Streamlit Cloud's image can ship an older sqlite3, which
+# would kill the app before it renders anything. pysqlite3-binary is a Linux-only
+# requirement, so this is a no-op on Windows and macOS. It must run before any
+# import that reaches chromadb — that is, before rag.store.
+try:  # pragma: no cover - platform-dependent
+    __import__("pysqlite3")
+    sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
+except ImportError:
+    pass
 
 import streamlit as st
 from dotenv import load_dotenv
@@ -18,7 +29,7 @@ load_dotenv()
 
 from rag import condense as condense_module
 from rag import fusion, hyde, multiquery
-from rag.answer import generate, generate_stream
+from rag.answer import citation_pairs, generate, generate_stream
 from rag.store import CHUNKS_PATH, build_store, load_chunks
 
 ANSWER_MODEL = "gpt-4o-mini"
@@ -359,23 +370,28 @@ def render_chip(pipeline_name: str, elapsed: float | None = None) -> None:
     )
 
 
-# Page titles in this corpus contain commas ("Tuition, Fees, & Aid"), so the
-# SOURCES line cannot be split on ",". Anchor on the bracketed URL instead.
-_CITATION = re.compile(r"([^()]+?)\s*\((https?://[^)\s]+)\)")
-
-
-def parse_citations(sources: str) -> list[tuple[str, str]]:
-    """Split a SOURCES line into (page title, url) pairs."""
-    return [
-        (title.strip().strip(",").strip(), url)
-        for title, url in _CITATION.findall(sources or "")
-        if title.strip().strip(",").strip()
-    ]
-
-
 def passages_from(docs: list, url: str) -> list:
     """The retrieved passages that came from one cited page."""
     return [doc for doc in docs if doc.metadata.get("url") == url]
+
+
+def recover_citations(sources: str, docs: list) -> list[tuple[str, str]]:
+    """Rescue citations from a SOURCES line that named pages without linking them.
+
+    Any page title mentioned in the line that also appears among the retrieved
+    documents gets its URL back, so the chip is still clickable. The URL comes
+    from our own retrieval, never invented.
+    """
+    lowered = (sources or "").lower()
+    recovered: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for doc in docs:
+        title = str(doc.metadata.get("page_title", "")).strip()
+        url = str(doc.metadata.get("url", "")).strip()
+        if title and url and url not in seen and title.lower() in lowered:
+            seen.add(url)
+            recovered.append((title, url))
+    return recovered
 
 
 def render_citations(message: dict, key_prefix: str) -> None:
@@ -384,11 +400,20 @@ def render_citations(message: dict, key_prefix: str) -> None:
     Prospective students are the audience, so a citation should answer "where
     did this come from?" in one click, not require reading a passage dump.
     """
-    citations = parse_citations(message.get("sources", ""))
+    raw_sources = message.get("sources", "") or ""
+    docs = message.get("docs", [])
+
+    citations = citation_pairs(raw_sources) or recover_citations(raw_sources, docs)
+
     if not citations:
+        # The model cited something we could not turn into links. Show its own
+        # words rather than nothing — silently dropping a citation is worse than
+        # an unstyled one.
+        if raw_sources.strip():
+            st.caption("Sources")
+            st.markdown(raw_sources.strip())
         return
 
-    docs = message.get("docs", [])
     st.caption("Sources")
 
     per_row = 3

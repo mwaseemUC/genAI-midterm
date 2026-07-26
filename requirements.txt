@@ -6,3 +6,7 @@ chromadb>=0.5,<2
 tiktoken>=0.7,<1
 python-dotenv>=1.0,<2
 pytest>=8,<9
+
+# Streamlit Cloud's Linux image can ship sqlite3 < 3.35, which chromadb refuses
+# to start on. Linux-only so local Windows installs are unaffected.
+pysqlite3-binary>=0.5; sys_platform == "linux"
